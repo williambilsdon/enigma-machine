@@ -7,9 +7,9 @@ mod app;
 mod enigma;
 
 fn main() -> Result<(), Error> {
-    let _enigma_machine = EnigmaMachine::new();
+    let enigma_machine = EnigmaMachine::new();
     let terminal = ratatui::init();
-    let app_result = App::new().run(terminal);
+    let app_result = App::new(enigma_machine).run(terminal);
     ratatui::restore();
     app_result
 }

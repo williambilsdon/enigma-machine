@@ -15,21 +15,30 @@ impl EnigmaMachine {
         }
     }
 
+    // pub fn with_enigma_i_i(self) -> Self {
+    //     let mut rotor = HashMap::new();
+    //     rotor.insert('a', 'e');
+    //     self.rotors.push(rotor);
+    //
+    //     self
+    // }
+
     pub fn encrypt_msg(&self, input: String) -> String {
         input.chars().map(|ch| self.encrypt_char(ch)).collect()
     }
 
-    fn encrypt_char(&self, input_ch: char) -> char {
+    pub fn encrypt_char(&self, input_ch: char) -> char {
+        self.rotor_passthroughs(input_ch)
+    }
+
+    fn rotor_passthroughs(&self, input_ch: char) -> char {
         let ch = self.rotors.iter().fold(input_ch, |ch, rotor| {
             rotor.get(&ch).unwrap_or(&ch).to_owned()
         });
 
-        let reflected = self
-            .rotors
+        self.rotors
             .iter()
             .rev()
-            .fold(ch, |ch, rotor| rotor.get(&ch).unwrap_or(&ch).to_owned());
-
-        reflected
+            .fold(ch, |ch, rotor| rotor.get(&ch).unwrap_or(&ch).to_owned())
     }
 }

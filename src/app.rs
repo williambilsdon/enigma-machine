@@ -8,6 +8,8 @@ use ratatui::{
 
 use std::io::Error;
 
+use crate::enigma::EnigmaMachine;
+
 /// App holds the state of the application
 pub struct App {
     /// Current value of the input box
@@ -17,7 +19,9 @@ pub struct App {
     /// Current input mode
     input_mode: InputMode,
     /// History of recorded messages
-    messages: Vec<String>,
+    raw_messages: Vec<String>,
+    encrypted_input: Vec<String>,
+    enigma: EnigmaMachine,
 }
 
 enum InputMode {
@@ -25,12 +29,14 @@ enum InputMode {
 }
 
 impl App {
-    pub const fn new() -> Self {
+    pub const fn new(enigma: EnigmaMachine) -> Self {
         Self {
             input: String::new(),
             input_mode: InputMode::Normal,
-            messages: Vec::new(),
+            raw_messages: Vec::new(),
+            encrypted_input: Vec::new(),
             character_index: 0,
+            enigma,
         }
     }
 
@@ -47,13 +53,15 @@ impl App {
     fn enter_char(&mut self, new_char: char) {
         let index = self.byte_index();
         self.input.insert(index, new_char);
+
+        self.encrypted_input
+            .insert(index, self.enigma.encrypt_char(new_char).to_string());
         self.move_cursor_right();
     }
 
     /// Returns the byte index based on the character position.
     ///
     /// Since each character in a string can be contain multiple bytes, it's necessary to calculate
-    /// the byte index based on the index of the character.
     fn byte_index(&self) -> usize {
         self.input
             .char_indices()
@@ -93,7 +101,7 @@ impl App {
     }
 
     fn submit_message(&mut self) {
-        self.messages.push(self.input.clone());
+        self.raw_messages.push(self.input.clone());
         self.input.clear();
         self.reset_cursor();
     }
@@ -119,8 +127,8 @@ impl App {
     }
 
     fn draw(&self, frame: &mut Frame) {
-        let vertical = Layout::vertical([Constraint::Min(1)]);
-        let [input_area] = vertical.areas(frame.area());
+        let vertical = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]);
+        let [input_area, output_area] = vertical.areas(frame.area());
 
         let input = Paragraph::new(self.input.as_str())
             .style(match self.input_mode {
@@ -128,6 +136,14 @@ impl App {
             })
             .block(Block::bordered().title("Input"));
         frame.render_widget(input, input_area);
+
+        let output = Paragraph::new(self.input.as_str())
+            .style(match self.input_mode {
+                InputMode::Normal => Style::default(),
+            })
+            .block(Block::bordered().title("Output"));
+        frame.render_widget(output, output_area);
+
         match self.input_mode {
             // Make the cursor visible and ask ratatui to put it at the specified coordinates after
             // rendering
