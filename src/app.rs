@@ -8,7 +8,7 @@ use ratatui::{
 
 use std::io::Error;
 
-use crate::enigma::EnigmaMachine;
+use crate::enigma::machine::EnigmaMachine;
 
 /// App holds the state of the application
 pub struct App {
@@ -20,7 +20,7 @@ pub struct App {
     input_mode: InputMode,
     /// History of recorded messages
     raw_messages: Vec<String>,
-    encrypted_input: Vec<String>,
+    encrypted_input: String,
     enigma: EnigmaMachine,
 }
 
@@ -34,7 +34,7 @@ impl App {
             input: String::new(),
             input_mode: InputMode::Normal,
             raw_messages: Vec::new(),
-            encrypted_input: Vec::new(),
+            encrypted_input: String::new(),
             character_index: 0,
             enigma,
         }
@@ -55,7 +55,7 @@ impl App {
         self.input.insert(index, new_char);
 
         self.encrypted_input
-            .insert(index, self.enigma.encrypt_char(new_char).to_string());
+            .insert(index, self.enigma.encrypt_char(new_char));
         self.move_cursor_right();
     }
 
@@ -137,7 +137,7 @@ impl App {
             .block(Block::bordered().title("Input"));
         frame.render_widget(input, input_area);
 
-        let output = Paragraph::new(self.input.as_str())
+        let output = Paragraph::new(self.encrypted_input.as_str())
             .style(match self.input_mode {
                 InputMode::Normal => Style::default(),
             })
