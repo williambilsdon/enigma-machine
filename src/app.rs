@@ -54,8 +54,13 @@ impl App {
         let index = self.byte_index();
         self.input.insert(index, new_char);
 
-        self.encrypted_input
-            .insert(index, self.enigma.encrypt_char(new_char));
+        let encrypted_char = if !new_char.is_alphabetic() {
+            new_char
+        } else {
+            self.enigma.encrypt_char(new_char)
+        };
+
+        self.encrypted_input.insert(index, encrypted_char);
         self.move_cursor_right();
     }
 
