@@ -14,13 +14,12 @@ use crate::enigma::machine::EnigmaMachine;
 pub struct App {
     /// Current value of the input box
     input: String,
+    encrypted_input: String,
     /// Position of cursor in the editor area.
-    character_index: usize,
+    character_x_index: usize,
+    character_y_index: usize,
     /// Current input mode
     input_mode: InputMode,
-    /// History of recorded messages
-    raw_messages: Vec<String>,
-    encrypted_input: String,
     enigma: EnigmaMachine,
 }
 
@@ -32,22 +31,32 @@ impl App {
     pub const fn new(enigma: EnigmaMachine) -> Self {
         Self {
             input: String::new(),
-            input_mode: InputMode::Normal,
-            raw_messages: Vec::new(),
             encrypted_input: String::new(),
-            character_index: 0,
+            input_mode: InputMode::Normal,
+            character_x_index: 0,
+            character_y_index: 0,
             enigma,
         }
     }
 
     fn move_cursor_left(&mut self) {
-        let cursor_moved_left = self.character_index.saturating_sub(1);
-        self.character_index = self.clamp_cursor(cursor_moved_left);
+        let cursor_moved_left = self.character_x_index.saturating_sub(1);
+        self.character_x_index = self.clamp_cursor(cursor_moved_left);
     }
 
     fn move_cursor_right(&mut self) {
-        let cursor_moved_right = self.character_index.saturating_add(1);
-        self.character_index = self.clamp_cursor(cursor_moved_right);
+        let cursor_moved_right = self.character_x_index.saturating_add(1);
+        self.character_x_index = self.clamp_cursor(cursor_moved_right);
+    }
+
+    fn move_cursor_up(&mut self) {
+        let cursor_moved_up = self.character_y_index.saturating_sub(1);
+        self.character_y_index = self.clamp_cursor(cursor_moved_up);
+    }
+
+    fn move_cursor_down(&mut self) {
+        let cursor_moved_down = self.character_y_index.saturating_add(1);
+        self.character_y_index = self.clamp_cursor(cursor_moved_down);
     }
 
     fn enter_char(&mut self, new_char: char) {
@@ -64,6 +73,14 @@ impl App {
         self.move_cursor_right();
     }
 
+    fn new_line(&mut self) {
+        let index = self.byte_index();
+        self.input.insert(index, '\u{000a}');
+        self.encrypted_input.insert(index, '\u{000a}');
+        self.move_cursor_down();
+        self.character_x_index = 0;
+    }
+
     /// Returns the byte index based on the character position.
     ///
     /// Since each character in a string can be contain multiple bytes, it's necessary to calculate
@@ -71,18 +88,18 @@ impl App {
         self.input
             .char_indices()
             .map(|(i, _)| i)
-            .nth(self.character_index)
+            .nth(self.character_x_index + self.character_y_index)
             .unwrap_or(self.input.len())
     }
 
     fn delete_char(&mut self) {
-        let is_not_cursor_leftmost = self.character_index != 0;
+        let is_not_cursor_leftmost = self.character_x_index != 0;
         if is_not_cursor_leftmost {
             // Method "remove" is not used on the saved text for deleting the selected char.
             // Reason: Using remove on String works on bytes instead of the chars.
             // Using remove would require special care because of char boundaries.
 
-            let current_index = self.character_index;
+            let current_index = self.character_x_index;
             let from_left_to_current_index = current_index - 1;
 
             // Getting all characters before the selected character.
@@ -101,16 +118,6 @@ impl App {
         new_cursor_pos.clamp(0, self.input.chars().count())
     }
 
-    fn reset_cursor(&mut self) {
-        self.character_index = 0;
-    }
-
-    fn submit_message(&mut self) {
-        self.raw_messages.push(self.input.clone());
-        self.input.clear();
-        self.reset_cursor();
-    }
-
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<(), Error> {
         loop {
             terminal.draw(|frame| self.draw(frame))?;
@@ -118,7 +125,7 @@ impl App {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
-                        KeyCode::Enter => self.submit_message(),
+                        KeyCode::Enter => self.new_line(),
                         KeyCode::Char(to_insert) => self.enter_char(to_insert),
                         KeyCode::Backspace => self.delete_char(),
                         KeyCode::Left => self.move_cursor_left(),
@@ -156,9 +163,9 @@ impl App {
             InputMode::Normal => frame.set_cursor_position(Position::new(
                 // Draw the cursor at the current position in the input field.
                 // This position is can be controlled via the left and right arrow key
-                input_area.x + self.character_index as u16 + 1,
+                input_area.x + self.character_x_index as u16 + 1,
                 // Move one line down, from the border to the input line
-                input_area.y + 1,
+                input_area.y + self.character_y_index as u16 + 1,
             )),
         }
     }
