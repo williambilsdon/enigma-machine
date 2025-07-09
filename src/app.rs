@@ -104,24 +104,42 @@ impl App {
             // Reason: Using remove on String works on bytes instead of the chars.
             // Using remove would require special care because of char boundaries.
 
-            let current_index = self.cursor_x_index;
-            let from_left_to_current_index = current_index - 1;
+            let character_index = self.character_index;
+            let from_left_to_current_index = character_index - 1;
 
             // Getting all characters before the selected character.
             let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
+            let encrypted_before_char_to_delete = self
+                .encrypted_input
+                .chars()
+                .take(from_left_to_current_index);
             // Getting all characters after selected character.
-            let after_char_to_delete = self.input.chars().skip(current_index);
+            let after_char_to_delete = self.input.chars().skip(character_index);
+            let encrypted_after_char_to_delete = self.encrypted_input.chars().skip(character_index);
 
             // Put all characters together except the selected one.
             // By leaving the selected one out, it is forgotten and therefore deleted.
             self.input = before_char_to_delete.chain(after_char_to_delete).collect();
-            self.move_cursor_left();
+            self.encrypted_input = encrypted_before_char_to_delete
+                .chain(encrypted_after_char_to_delete)
+                .collect();
+            let cursor_x_index = self.cursor_x_index;
+            let from_left_to_current_x_index = cursor_x_index.checked_sub(1);
+            if from_left_to_current_x_index.is_some() {
+                self.move_cursor_left();
+                self.character_index -= 1;
+            } else {
+                self.move_cursor_up();
+            }
         }
     }
 
     fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
         new_cursor_pos.clamp(0, self.input.chars().count())
     }
+
+    // Change to using a gap buffer and calculates the cursor pos based on gap buffer cursor and
+    // max x of text area
 
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<(), Error> {
         loop {
