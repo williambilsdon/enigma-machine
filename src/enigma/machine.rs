@@ -18,7 +18,11 @@ impl EnigmaMachine {
     }
 
     pub fn encrypt_char(&self, input_ch: char) -> char {
-        self.rotor_passthroughs(input_ch.to_ascii_lowercase())
+        if input_ch.is_alphabetic() {
+            return self.rotor_passthroughs(input_ch.to_ascii_lowercase());
+        }
+
+        input_ch
     }
 
     fn rotor_passthroughs(&self, input_ch: char) -> char {

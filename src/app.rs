@@ -13,10 +13,9 @@ use crate::enigma::machine::EnigmaMachine;
 /// App holds the state of the application
 pub struct App {
     // Current value of the input box
-    input: String,
-    encrypted_input: String,
+    raw_input: Vec<Vec<char>>,
+    encrypted_input: Vec<Vec<char>>,
     // Position of cursor in input
-    character_index: usize,
     // Position of cursor in the editor area.
     cursor_x_index: usize,
     cursor_y_index: usize,
@@ -32,10 +31,9 @@ enum InputMode {
 impl App {
     pub const fn new(enigma: EnigmaMachine) -> Self {
         Self {
-            input: String::new(),
-            encrypted_input: String::new(),
+            raw_input: Vec::new(),
+            encrypted_input: Vec::new(),
             input_mode: InputMode::Normal,
-            character_index: 0,
             cursor_x_index: 0,
             cursor_y_index: 0,
             enigma,
@@ -63,79 +61,50 @@ impl App {
     }
 
     fn enter_char(&mut self, new_char: char) {
-        let index = self.byte_index();
-        self.input.insert(index, new_char);
+        let line = self.raw_input.get_mut(self.cursor_y_index);
 
-        let encrypted_char = if !new_char.is_alphabetic() {
-            new_char
+        if let Some(line) = line {
+            line.insert(self.cursor_x_index, new_char);
         } else {
-            self.enigma.encrypt_char(new_char)
-        };
+            self.raw_input.push(vec![new_char]);
+        }
 
-        self.encrypted_input.insert(index, encrypted_char);
+        let encrypted_line = self.encrypted_input.get_mut(self.cursor_y_index);
+
+        if let Some(line) = encrypted_line {
+            line.insert(self.cursor_x_index, self.enigma.encrypt_char(new_char));
+        } else {
+            self.encrypted_input.push(vec![new_char]);
+        }
+
         self.move_cursor_right();
-        self.character_index += 1;
     }
 
     fn new_line(&mut self) {
-        let index = self.byte_index();
-        self.input.insert(index, '\u{000a}');
-        self.encrypted_input.insert(index, '\u{000a}');
+        self.raw_input.push(Vec::new());
+        self.encrypted_input.push(Vec::new());
         self.move_cursor_down();
         self.cursor_x_index = 0;
-        self.character_index += 1;
-    }
-
-    /// Returns the byte index based on the character position.
-    ///
-    /// Since each character in a string can be contain multiple bytes, it's necessary to calculate
-    fn byte_index(&self) -> usize {
-        self.input
-            .char_indices()
-            .map(|(i, _)| i)
-            .nth(self.character_index)
-            .unwrap_or(self.input.len())
     }
 
     fn delete_char(&mut self) {
-        let is_not_cursor_top_left = self.cursor_x_index != 0 && self.cursor_y_index != 0;
+        let is_not_cursor_top_left = self.cursor_y_index != 0 || self.cursor_x_index != 0;
         if is_not_cursor_top_left {
-            // Method "remove" is not used on the saved text for deleting the selected char.
-            // Reason: Using remove on String works on bytes instead of the chars.
-            // Using remove would require special care because of char boundaries.
-
-            let character_index = self.character_index;
-            let from_left_to_current_index = character_index - 1;
-
-            // Getting all characters before the selected character.
-            let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
-            let encrypted_before_char_to_delete = self
-                .encrypted_input
-                .chars()
-                .take(from_left_to_current_index);
-            // Getting all characters after selected character.
-            let after_char_to_delete = self.input.chars().skip(character_index);
-            let encrypted_after_char_to_delete = self.encrypted_input.chars().skip(character_index);
-
-            // Put all characters together except the selected one.
-            // By leaving the selected one out, it is forgotten and therefore deleted.
-            self.input = before_char_to_delete.chain(after_char_to_delete).collect();
-            self.encrypted_input = encrypted_before_char_to_delete
-                .chain(encrypted_after_char_to_delete)
-                .collect();
-            let cursor_x_index = self.cursor_x_index;
-            let from_left_to_current_x_index = cursor_x_index.checked_sub(1);
-            if from_left_to_current_x_index.is_some() {
-                self.move_cursor_left();
-                self.character_index -= 1;
-            } else {
+            if self.raw_input[self.cursor_y_index].is_empty() {
+                self.raw_input.remove(self.cursor_y_index);
+                self.encrypted_input.remove(self.cursor_y_index);
                 self.move_cursor_up();
+                self.cursor_x_index = self.raw_input[self.cursor_y_index].len();
+            } else {
+                let char_before_cursor = self.cursor_x_index - 1;
+                self.raw_input[self.cursor_y_index].remove(char_before_cursor);
+                self.encrypted_input[self.cursor_y_index].remove(char_before_cursor);
+                self.move_cursor_left();
             }
         }
     }
-
     fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
-        new_cursor_pos.clamp(0, self.input.chars().count())
+        new_cursor_pos.clamp(0, self.raw_input[self.cursor_y_index].len())
     }
 
     // Change to using a gap buffer and calculates the cursor pos based on gap buffer cursor and
@@ -163,21 +132,34 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         let vertical = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]);
-        let [input_area, output_area] = vertical.areas(frame.area());
+        let [input_area, encrypted_area] = vertical.areas(frame.area());
 
-        let input = Paragraph::new(self.input.as_str())
-            .style(match self.input_mode {
-                InputMode::Normal => Style::default(),
-            })
-            .block(Block::bordered().title("Input"));
+        let input = Paragraph::new(
+            self.raw_input
+                .iter()
+                .map(|line| line.iter().collect::<String>())
+                .collect::<Vec<String>>()
+                .join("\n"),
+        )
+        .style(match self.input_mode {
+            InputMode::Normal => Style::default(),
+        })
+        .block(Block::bordered().title("Input"));
         frame.render_widget(input, input_area);
 
-        let output = Paragraph::new(self.encrypted_input.as_str())
-            .style(match self.input_mode {
-                InputMode::Normal => Style::default(),
-            })
-            .block(Block::bordered().title("Output"));
-        frame.render_widget(output, output_area);
+        let output = Paragraph::new(
+            self.encrypted_input
+                .iter()
+                .map(|line| line.iter().collect::<String>())
+                .collect::<Vec<String>>()
+                .join("\n"),
+        )
+        .style(match self.input_mode {
+            InputMode::Normal => Style::default(),
+        })
+        .block(Block::bordered().title("Output"));
+
+        frame.render_widget(output, encrypted_area);
 
         match self.input_mode {
             // Make the cursor visible and ask ratatui to put it at the specified coordinates after
