@@ -74,7 +74,8 @@ impl App {
         if let Some(line) = encrypted_line {
             line.insert(self.cursor_x_index, self.enigma.encrypt_char(new_char));
         } else {
-            self.encrypted_input.push(vec![new_char]);
+            self.encrypted_input
+                .push(vec![self.enigma.encrypt_char(new_char)]);
         }
 
         self.move_cursor_right();
@@ -93,7 +94,7 @@ impl App {
             if self.raw_input[self.cursor_y_index].is_empty() {
                 self.raw_input.remove(self.cursor_y_index);
                 self.encrypted_input.remove(self.cursor_y_index);
-                self.move_cursor_up();
+                self.cursor_y_index -= 1;
                 self.cursor_x_index = self.raw_input[self.cursor_y_index].len();
             } else {
                 let char_before_cursor = self.cursor_x_index - 1;
