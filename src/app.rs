@@ -3,7 +3,7 @@ use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
     layout::{Constraint, Layout, Position},
     style::Style,
-    widgets::{Block, Paragraph},
+    widgets::{Block, Paragraph, Wrap},
 };
 
 use std::io::Error;
@@ -142,6 +142,7 @@ impl App {
                 .collect::<Vec<String>>()
                 .join("\n"),
         )
+        .wrap(Wrap { trim: true })
         .style(match self.input_mode {
             InputMode::Normal => Style::default(),
         })
@@ -155,6 +156,7 @@ impl App {
                 .collect::<Vec<String>>()
                 .join("\n"),
         )
+        .wrap(Wrap { trim: true })
         .style(match self.input_mode {
             InputMode::Normal => Style::default(),
         })
